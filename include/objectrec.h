@@ -20,3 +20,11 @@ struct FeatureVector {
     double hu1, hu2, hu3;
 };
 FeatureVector computeFeatures(const cv::Mat& binary, const RegionInfo& region, cv::Mat& display);
+
+struct TrainingEntry {
+    std::string label;
+    FeatureVector features;
+};
+void saveTrainingData(const std::vector<TrainingEntry>& db, const std::string& path);
+std::vector<TrainingEntry> loadTrainingData(const std::string& path);
+std::string classify(const FeatureVector& fv, const std::vector<TrainingEntry>& db);
