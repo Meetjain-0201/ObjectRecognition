@@ -1,0 +1,6 @@
+build/
+*.exe
+*.o
+*.obj
+write_cmake.py
+$null
