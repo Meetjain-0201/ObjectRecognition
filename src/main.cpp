@@ -10,26 +10,24 @@ int main(int argc, char* argv[]) {
     };
 
     for (auto& fname : images) {
-        std::string fullPath = imgDir + fname;
-        cv::Mat src = cv::imread(fullPath);
-        if (src.empty()) {
-            std::cout << "Could not load: " << fullPath << std::endl;
-            continue;
-        }
+        cv::Mat src = cv::imread(imgDir + fname);
+        if (src.empty()) { std::cout << "Could not load: " << fname << std::endl; continue; }
 
         cv::Mat binary = applyThreshold(src);
+        cv::Mat cleaned = applyMorphology(binary);
 
         cv::imshow("Original - " + fname, src);
         cv::imshow("Thresholded - " + fname, binary);
+        cv::imshow("Cleaned - " + fname, cleaned);
 
-        std::string outPath = "C:/Users/meetj/Downloads/ObjectRecognition/results/thresh_" + fname;
-        cv::imwrite(outPath, binary);
+        cv::imwrite("C:/Users/meetj/Downloads/ObjectRecognition/results/thresh_" + fname, binary);
+        cv::imwrite("C:/Users/meetj/Downloads/ObjectRecognition/results/cleaned_" + fname, cleaned);
         std::cout << "Processed: " << fname << std::endl;
 
         cv::waitKey(0);
         cv::destroyAllWindows();
     }
 
-    std::cout << "Done. Results saved in results/" << std::endl;
+    std::cout << "Done." << std::endl;
     return 0;
 }
