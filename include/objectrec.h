@@ -30,9 +30,9 @@ struct TrainingEntry {
 };
 void saveTrainingData(const std::vector<TrainingEntry>& db, const std::string& path);
 std::vector<TrainingEntry> loadTrainingData(const std::string& path);
-std::string classify(const FeatureVector& fv, const std::vector<TrainingEntry>& db);
+std::string classify(const FeatureVector& fv, const std::vector<TrainingEntry>& db, double threshold=3.0);
 
-// Task 8: CNN Embeddings
+// Task 9: CNN Embeddings
 void prepEmbeddingImage(const cv::Mat& frame, cv::Mat& embimage,
                          int cx, int cy, float theta,
                          float minE1, float maxE1, float minE2, float maxE2);

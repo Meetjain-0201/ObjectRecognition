@@ -25,6 +25,11 @@ const std::vector<std::pair<std::string,std::string>> EVAL_SET = {
     {"obj5_1.jpeg","object5"},{"obj5_2.jpeg","object5"},{"obj5_3.jpeg","object5"}
 };
 
+// Unknown test images - dev set not in DB
+const std::vector<std::string> UNKNOWN_SET = {
+    "example001.png", "example068.png", "example167.png"
+};
+
 const std::vector<std::string> LABELS = {"object1","object2","object3","object4","object5"};
 
 int labelIndex(const std::string& l) {
@@ -37,6 +42,7 @@ int main(int argc, char* argv[]) {
     bool trainingMode = (argc > 1 && std::string(argv[1]) == "--train");
     bool demoMode     = (argc > 1 && std::string(argv[1]) == "--demo");
     bool cnnMode      = (argc > 1 && std::string(argv[1]) == "--cnn");
+    bool unknownMode  = (argc > 1 && std::string(argv[1]) == "--unknown");
     std::vector<TrainingEntry> db = loadTrainingData(DB_PATH);
 
     if (trainingMode) {
@@ -62,13 +68,44 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    if (unknownMode) {
+        std::cout << "=== UNKNOWN OBJECT DETECTION ===" << std::endl;
+        std::cout << "Testing with images NOT in training DB..." << std::endl;
+        for (auto& fname : UNKNOWN_SET) {
+            cv::Mat src = cv::imread(IMG_DIR + fname);
+            if (src.empty()) { std::cout << "Could not load: " << fname << std::endl; continue; }
+            cv::Mat binary  = applyThreshold(src);
+            cv::Mat cleaned = applyMorphology(binary);
+            cv::Mat labelViz;
+            std::vector<RegionInfo> regions = segmentRegions(cleaned, labelViz);
+            if (!regions.empty()) {
+                cv::Mat featDisplay;
+                FeatureVector fv = computeFeatures(cleaned, regions[0], featDisplay);
+                // Use tight threshold so unknown objects get flagged
+                std::string predicted = classify(fv, db, 0.5);
+                cv::Mat result = src.clone();
+                cv::rectangle(result, regions[0].boundingBox, cv::Scalar(0,165,255), 2);
+                cv::putText(result, "Predicted: " + predicted, cv::Point(20,50),
+                    cv::FONT_HERSHEY_SIMPLEX, 1.2,
+                    predicted == "unknown" ? cv::Scalar(0,0,255) : cv::Scalar(0,255,0), 2);
+                cv::imshow("Unknown Test - " + fname, result);
+                cv::imwrite(RES_DIR + "unknown_" + fname, result);
+                std::cout << fname << " -> " << predicted << std::endl;
+            } else {
+                std::cout << fname << " -> no region found" << std::endl;
+            }
+            cv::waitKey(0);
+            cv::destroyAllWindows();
+        }
+        return 0;
+    }
+
     if (cnnMode) {
         std::cout << "=== CNN EMBEDDING MODE ===" << std::endl;
         cv::dnn::Net net = cv::dnn::readNetFromONNX(MODEL_PATH);
         if (net.empty()) { std::cout << "Failed to load model!" << std::endl; return 1; }
         std::cout << "ResNet18 loaded." << std::endl;
 
-        // Build CNN training embeddings
         std::vector<std::pair<std::string, cv::Mat>> cnnDB;
         for (auto& [fname, label] : TRAIN_SET) {
             cv::Mat src = cv::imread(IMG_DIR + fname);
@@ -92,7 +129,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Evaluate with CNN
         std::cout << "\n=== CNN EVALUATION ===" << std::endl;
         int confusion[5][5] = {};
         for (auto& [fname, trueLabel] : EVAL_SET) {
@@ -113,8 +149,6 @@ int main(int argc, char* argv[]) {
                     regions[0].minE1, regions[0].maxE1,
                     regions[0].minE2, regions[0].maxE2);
                 cv::Mat emb = getEmbedding(embimg, net);
-
-                // Nearest neighbor by embedding distance
                 double bestDist = 1e18;
                 for (auto& [lbl, tEmb] : cnnDB) {
                     double d = embeddingDistance(emb, tEmb);
@@ -122,9 +156,9 @@ int main(int argc, char* argv[]) {
                 }
                 cv::Mat result = src.clone();
                 cv::rectangle(result, regions[0].boundingBox, cv::Scalar(0,255,0), 2);
-                cv::putText(result, "CNN: " + predicted,
-                    cv::Point(20, 50), cv::FONT_HERSHEY_SIMPLEX, 1.2,
-                    predicted == trueLabel ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 2);
+                cv::putText(result, "CNN: " + predicted, cv::Point(20,50),
+                    cv::FONT_HERSHEY_SIMPLEX, 1.2,
+                    predicted==trueLabel ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 2);
                 cv::imwrite(RES_DIR + "cnn_" + fname, result);
             }
             int ti = labelIndex(trueLabel), pi = labelIndex(predicted);
@@ -132,7 +166,6 @@ int main(int argc, char* argv[]) {
             std::cout << fname << " -> " << predicted << " (" << trueLabel << ") "
                       << (predicted==trueLabel ? "CORRECT" : "WRONG") << std::endl;
         }
-
         std::cout << "\n=== CNN CONFUSION MATRIX ===" << std::endl;
         std::cout << std::setw(10) << " ";
         for (auto& l : LABELS) std::cout << std::setw(10) << l;

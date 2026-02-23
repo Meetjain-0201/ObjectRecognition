@@ -39,7 +39,6 @@ std::vector<TrainingEntry> loadTrainingData(const std::string& path) {
     return db;
 }
 
-// Scaled Euclidean distance
 static double scaledDist(const FeatureVector& a, const FeatureVector& b,
                           const std::vector<double>& stdevs) {
     std::vector<double> diff = {
@@ -57,10 +56,10 @@ static double scaledDist(const FeatureVector& a, const FeatureVector& b,
     return sqrt(dist);
 }
 
-std::string classify(const FeatureVector& fv, const std::vector<TrainingEntry>& db) {
+std::string classify(const FeatureVector& fv, const std::vector<TrainingEntry>& db, double threshold) {
     if (db.empty()) return "unknown";
 
-    // Compute stdev for each feature across db
+    // Compute stdev for each feature
     std::vector<std::vector<double>> feats(5, std::vector<double>(db.size()));
     for (int j = 0; j < (int)db.size(); j++) {
         feats[0][j] = db[j].features.percentFilled;
@@ -77,12 +76,15 @@ std::string classify(const FeatureVector& fv, const std::vector<TrainingEntry>& 
         stdevs[i] = sqrt(var / feats[i].size());
     }
 
-    // Nearest neighbor
+    // Nearest neighbor with unknown threshold
     double bestDist = 1e18;
     std::string bestLabel = "unknown";
     for (auto& e : db) {
         double d = scaledDist(fv, e.features, stdevs);
         if (d < bestDist) { bestDist = d; bestLabel = e.label; }
     }
+
+    // If distance too large, object is unknown
+    if (bestDist > threshold) return "unknown";
     return bestLabel;
 }
