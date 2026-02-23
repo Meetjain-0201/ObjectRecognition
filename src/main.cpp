@@ -7,7 +7,6 @@ const std::string DB_PATH = "C:/Users/meetj/Downloads/ObjectRecognition/data/tra
 const std::string IMG_DIR = "C:/Users/meetj/Downloads/ObjectRecognition/data/test_images/";
 const std::string RES_DIR = "C:/Users/meetj/Downloads/ObjectRecognition/results/";
 
-// Training: 2 images per object
 const std::vector<std::pair<std::string,std::string>> TRAIN_SET = {
     {"obj1_1.jpeg","object1"},{"obj1_2.jpeg","object1"},
     {"obj2_1.jpeg","object2"},{"obj2_2.jpeg","object2"},
@@ -16,7 +15,6 @@ const std::vector<std::pair<std::string,std::string>> TRAIN_SET = {
     {"obj5_1.jpeg","object5"},{"obj5_2.jpeg","object5"}
 };
 
-// Evaluation: held-out 3rd image only (unseen)
 const std::vector<std::pair<std::string,std::string>> EVAL_SET = {
     {"obj1_1.jpeg","object1"},{"obj1_2.jpeg","object1"},{"obj1_3.jpeg","object1"},
     {"obj2_1.jpeg","object2"},{"obj2_2.jpeg","object2"},{"obj2_3.jpeg","object2"},
@@ -35,6 +33,7 @@ int labelIndex(const std::string& l) {
 
 int main(int argc, char* argv[]) {
     bool trainingMode = (argc > 1 && std::string(argv[1]) == "--train");
+    bool demoMode     = (argc > 1 && std::string(argv[1]) == "--demo");
     std::vector<TrainingEntry> db = loadTrainingData(DB_PATH);
 
     if (trainingMode) {
@@ -53,8 +52,6 @@ int main(int argc, char* argv[]) {
                 TrainingEntry e; e.label = label; e.features = fv;
                 db.push_back(e);
                 std::cout << "Stored: " << label << " fill=" << fv.percentFilled << " hw=" << fv.hwRatio << std::endl;
-            } else {
-                std::cout << "No region found in: " << fname << std::endl;
             }
         }
         saveTrainingData(db, DB_PATH);
@@ -62,25 +59,66 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // Evaluation + confusion matrix
+    if (demoMode) {
+        std::cout << "=== DEMO MODE - press any key to advance ===" << std::endl;
+        for (auto& [fname, trueLabel] : EVAL_SET) {
+            cv::Mat src = cv::imread(IMG_DIR + fname);
+            if (src.empty()) continue;
+
+            cv::Mat binary  = applyThreshold(src);
+            cv::Mat cleaned = applyMorphology(binary);
+            cv::Mat labelViz;
+            std::vector<RegionInfo> regions = segmentRegions(cleaned, labelViz);
+
+            if (!regions.empty()) {
+                cv::Mat featDisplay;
+                FeatureVector fv = computeFeatures(cleaned, regions[0], featDisplay);
+                std::string predicted = classify(fv, db);
+
+                cv::Mat result = src.clone();
+                cv::rectangle(result, regions[0].boundingBox, cv::Scalar(0,255,0), 3);
+                cv::putText(result, "Predicted: " + predicted,
+                    cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 1.2,
+                    predicted == trueLabel ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 2);
+                cv::putText(result, "True: " + trueLabel,
+                    cv::Point(20, 80), cv::FONT_HERSHEY_SIMPLEX, 1.0,
+                    cv::Scalar(255,255,0), 2);
+                cv::putText(result, predicted == trueLabel ? "CORRECT" : "WRONG",
+                    cv::Point(20, 120), cv::FONT_HERSHEY_SIMPLEX, 1.2,
+                    predicted == trueLabel ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 3);
+
+                // Show all pipeline stages
+                cv::imshow("1. Original", src);
+                cv::imshow("2. Thresholded", binary);
+                cv::imshow("3. Cleaned", cleaned);
+                cv::imshow("4. Regions", labelViz);
+                cv::imshow("5. Features + Axis", featDisplay);
+                cv::imshow("6. Classification Result", result);
+
+                std::cout << fname << " -> " << predicted
+                          << (predicted == trueLabel ? " CORRECT" : " WRONG") << std::endl;
+            }
+            cv::waitKey(0);
+            cv::destroyAllWindows();
+        }
+        return 0;
+    }
+
+    // Normal evaluation + confusion matrix
     std::cout << "=== EVALUATION MODE ===" << std::endl;
     int confusion[5][5] = {};
-
     for (auto& [fname, trueLabel] : EVAL_SET) {
         cv::Mat src = cv::imread(IMG_DIR + fname);
-        if (src.empty()) { std::cout << "Could not load: " << fname << std::endl; continue; }
-
+        if (src.empty()) continue;
         cv::Mat binary  = applyThreshold(src);
         cv::Mat cleaned = applyMorphology(binary);
         cv::Mat labelViz;
         std::vector<RegionInfo> regions = segmentRegions(cleaned, labelViz);
-
         std::string predicted = "unknown";
         if (!regions.empty()) {
             cv::Mat featDisplay;
             FeatureVector fv = computeFeatures(cleaned, regions[0], featDisplay);
             predicted = classify(fv, db);
-
             cv::Mat result = src.clone();
             cv::rectangle(result, regions[0].boundingBox, cv::Scalar(0,255,0), 2);
             cv::putText(result, predicted,
@@ -89,17 +127,13 @@ int main(int argc, char* argv[]) {
                 predicted == trueLabel ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 2);
             cv::imwrite(RES_DIR + "classified_" + fname, result);
         }
-
         int ti = labelIndex(trueLabel);
         int pi = labelIndex(predicted);
         if (ti >= 0 && pi >= 0) confusion[ti][pi]++;
-
         std::cout << fname << " -> predicted=" << predicted
                   << " true=" << trueLabel
                   << (predicted == trueLabel ? " CORRECT" : " WRONG") << std::endl;
     }
-
-    // Print confusion matrix
     std::cout << "\n=== CONFUSION MATRIX ===" << std::endl;
     std::cout << std::setw(10) << " ";
     for (auto& l : LABELS) std::cout << std::setw(10) << l;
@@ -109,7 +143,7 @@ int main(int argc, char* argv[]) {
         std::cout << std::setw(10) << LABELS[i];
         for (int j = 0; j < 5; j++) {
             std::cout << std::setw(10) << confusion[i][j];
-            if (i == j) correct += confusion[i][j];
+            if (i==j) correct += confusion[i][j];
             total += confusion[i][j];
         }
         std::cout << std::endl;
