@@ -3,8 +3,13 @@
 #include <string>
 #include <vector>
 
-// Task 1: Thresholding (written from scratch)
 cv::Mat applyThreshold(const cv::Mat& src);
-
-// Task 2: Morphological filtering (written from scratch)
 cv::Mat applyMorphology(const cv::Mat& binary);
+
+struct RegionInfo {
+    int label;
+    cv::Point2f centroid;
+    double area;
+    cv::Rect boundingBox;
+};
+std::vector<RegionInfo> segmentRegions(const cv::Mat& binary, cv::Mat& labelViz);
