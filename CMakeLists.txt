@@ -11,5 +11,6 @@ add_executable(objectrec
     src/segmentation.cpp
     src/features.cpp
     src/classifier.cpp
+    src/embedding.cpp
 )
 target_link_libraries(objectrec ${OpenCV_LIBS})
