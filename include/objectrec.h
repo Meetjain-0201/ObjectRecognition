@@ -13,3 +13,10 @@ struct RegionInfo {
     cv::Rect boundingBox;
 };
 std::vector<RegionInfo> segmentRegions(const cv::Mat& binary, cv::Mat& labelViz);
+
+struct FeatureVector {
+    double percentFilled;
+    double hwRatio;
+    double hu1, hu2, hu3;
+};
+FeatureVector computeFeatures(const cv::Mat& binary, const RegionInfo& region, cv::Mat& display);
