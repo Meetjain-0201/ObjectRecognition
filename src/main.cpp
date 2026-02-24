@@ -14,7 +14,12 @@ const std::vector<std::pair<std::string,std::string>> TRAIN_SET = {
     {"obj2_1.jpeg","object2"},{"obj2_2.jpeg","object2"},
     {"obj3_1.jpeg","object3"},{"obj3_2.jpeg","object3"},
     {"obj4_1.jpeg","object4"},{"obj4_2.jpeg","object4"},
-    {"obj5_1.jpeg","object5"},{"obj5_2.jpeg","object5"}
+    {"obj5_1.jpeg","object5"},{"obj5_2.jpeg","object5"},
+    {"obj6_1.jpeg","object6"},{"obj6_2.jpeg","object6"},
+    {"obj7_1.jpeg","object7"},{"obj7_2.jpeg","object7"},
+    {"obj8_1.jpeg","object8"},{"obj8_2.jpeg","object8"},
+    {"obj9_1.jpeg","object9"},{"obj9_2.jpeg","object9"},
+    {"obj10_1.jpeg","object10"},{"obj10_2.jpeg","object10"}
 };
 
 const std::vector<std::pair<std::string,std::string>> EVAL_SET = {
@@ -22,15 +27,22 @@ const std::vector<std::pair<std::string,std::string>> EVAL_SET = {
     {"obj2_1.jpeg","object2"},{"obj2_2.jpeg","object2"},{"obj2_3.jpeg","object2"},
     {"obj3_1.jpeg","object3"},{"obj3_2.jpeg","object3"},{"obj3_3.jpeg","object3"},
     {"obj4_1.jpeg","object4"},{"obj4_2.jpeg","object4"},{"obj4_3.jpeg","object4"},
-    {"obj5_1.jpeg","object5"},{"obj5_2.jpeg","object5"},{"obj5_3.jpeg","object5"}
+    {"obj5_1.jpeg","object5"},{"obj5_2.jpeg","object5"},{"obj5_3.jpeg","object5"},
+    {"obj6_1.jpeg","object6"},{"obj6_2.jpeg","object6"},{"obj6_3.jpeg","object6"},
+    {"obj7_1.jpeg","object7"},{"obj7_2.jpeg","object7"},{"obj7_3.jpeg","object7"},
+    {"obj8_1.jpeg","object8"},{"obj8_2.jpeg","object8"},{"obj8_3.jpeg","object8"},
+    {"obj9_1.jpeg","object9"},{"obj9_2.jpeg","object9"},{"obj9_3.jpeg","object9"},
+    {"obj10_1.jpeg","object10"},{"obj10_2.jpeg","object10"},{"obj10_3.jpeg","object10"}
 };
 
-// Unknown test images - dev set not in DB
 const std::vector<std::string> UNKNOWN_SET = {
     "example001.png", "example068.png", "example167.png"
 };
 
-const std::vector<std::string> LABELS = {"object1","object2","object3","object4","object5"};
+const std::vector<std::string> LABELS = {
+    "object1","object2","object3","object4","object5",
+    "object6","object7","object8","object9","object10"
+};
 
 int labelIndex(const std::string& l) {
     for (int i = 0; i < (int)LABELS.size(); i++)
@@ -61,6 +73,8 @@ int main(int argc, char* argv[]) {
                 TrainingEntry e; e.label = label; e.features = fv;
                 db.push_back(e);
                 std::cout << "Stored: " << label << " fill=" << fv.percentFilled << std::endl;
+            } else {
+                std::cout << "No region found: " << fname << std::endl;
             }
         }
         saveTrainingData(db, DB_PATH);
@@ -70,7 +84,6 @@ int main(int argc, char* argv[]) {
 
     if (unknownMode) {
         std::cout << "=== UNKNOWN OBJECT DETECTION ===" << std::endl;
-        std::cout << "Testing with images NOT in training DB..." << std::endl;
         for (auto& fname : UNKNOWN_SET) {
             cv::Mat src = cv::imread(IMG_DIR + fname);
             if (src.empty()) { std::cout << "Could not load: " << fname << std::endl; continue; }
@@ -81,7 +94,6 @@ int main(int argc, char* argv[]) {
             if (!regions.empty()) {
                 cv::Mat featDisplay;
                 FeatureVector fv = computeFeatures(cleaned, regions[0], featDisplay);
-                // Use tight threshold so unknown objects get flagged
                 std::string predicted = classify(fv, db, 0.5);
                 cv::Mat result = src.clone();
                 cv::rectangle(result, regions[0].boundingBox, cv::Scalar(0,165,255), 2);
@@ -91,8 +103,6 @@ int main(int argc, char* argv[]) {
                 cv::imshow("Unknown Test - " + fname, result);
                 cv::imwrite(RES_DIR + "unknown_" + fname, result);
                 std::cout << fname << " -> " << predicted << std::endl;
-            } else {
-                std::cout << fname << " -> no region found" << std::endl;
             }
             cv::waitKey(0);
             cv::destroyAllWindows();
@@ -130,7 +140,8 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout << "\n=== CNN EVALUATION ===" << std::endl;
-        int confusion[5][5] = {};
+        int n = LABELS.size();
+        std::vector<std::vector<int>> confusion(n, std::vector<int>(n, 0));
         for (auto& [fname, trueLabel] : EVAL_SET) {
             cv::Mat src = cv::imread(IMG_DIR + fname);
             if (src.empty()) continue;
@@ -168,13 +179,13 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "\n=== CNN CONFUSION MATRIX ===" << std::endl;
         std::cout << std::setw(10) << " ";
-        for (auto& l : LABELS) std::cout << std::setw(10) << l;
+        for (auto& l : LABELS) std::cout << std::setw(8) << l;
         std::cout << std::endl;
         int correct=0, total=0;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < n; i++) {
             std::cout << std::setw(10) << LABELS[i];
-            for (int j = 0; j < 5; j++) {
-                std::cout << std::setw(10) << confusion[i][j];
+            for (int j = 0; j < n; j++) {
+                std::cout << std::setw(8) << confusion[i][j];
                 if (i==j) correct += confusion[i][j];
                 total += confusion[i][j];
             }
@@ -221,7 +232,8 @@ int main(int argc, char* argv[]) {
 
     // Normal evaluation
     std::cout << "=== EVALUATION MODE ===" << std::endl;
-    int confusion[5][5] = {};
+    int n = LABELS.size();
+    std::vector<std::vector<int>> confusion(n, std::vector<int>(n, 0));
     for (auto& [fname, trueLabel] : EVAL_SET) {
         cv::Mat src = cv::imread(IMG_DIR + fname);
         if (src.empty()) continue;
@@ -250,13 +262,13 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "\n=== CONFUSION MATRIX ===" << std::endl;
     std::cout << std::setw(10) << " ";
-    for (auto& l : LABELS) std::cout << std::setw(10) << l;
+    for (auto& l : LABELS) std::cout << std::setw(8) << l;
     std::cout << std::endl;
     int correct=0, total=0;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < n; i++) {
         std::cout << std::setw(10) << LABELS[i];
-        for (int j = 0; j < 5; j++) {
-            std::cout << std::setw(10) << confusion[i][j];
+        for (int j = 0; j < n; j++) {
+            std::cout << std::setw(8) << confusion[i][j];
             if (i==j) correct += confusion[i][j];
             total += confusion[i][j];
         }
