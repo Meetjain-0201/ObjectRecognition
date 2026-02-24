@@ -257,7 +257,28 @@ int main(int argc, char* argv[]) {
                   << (100.0*correct/total) << "%" << std::endl;
         return 0;
     }
-
+    if (argc > 1 && std::string(argv[1]) == "--saveimages") {
+        std::cout << "=== SAVING ALL PIPELINE IMAGES ===" << std::endl;
+        for (auto& [fname, trueLabel] : EVAL_SET) {
+            cv::Mat src = cv::imread(IMG_DIR + fname);
+            if (src.empty()) continue;
+            cv::Mat binary  = applyThreshold(src);
+            cv::Mat cleaned = applyMorphology(binary);
+            cv::Mat labelViz;
+            std::vector<RegionInfo> regions = segmentRegions(cleaned, labelViz);
+            cv::imwrite(RES_DIR + "thresh_" + fname, binary);
+            cv::imwrite(RES_DIR + "cleaned_" + fname, cleaned);
+            cv::imwrite(RES_DIR + "regions_" + fname, labelViz);
+            if (!regions.empty()) {
+                cv::Mat featDisplay;
+                FeatureVector fv = computeFeatures(cleaned, regions[0], featDisplay);
+                cv::imwrite(RES_DIR + "features_" + fname, featDisplay);
+            }
+            std::cout << "Saved: " << fname << std::endl;
+        }
+        std::cout << "All images saved to results/" << std::endl;
+        return 0;
+    }
     if (demoMode) {
         std::cout << "=== DEMO MODE - press any key to advance ===" << std::endl;
         for (auto& [fname, trueLabel] : EVAL_SET) {
