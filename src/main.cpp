@@ -55,6 +55,7 @@ int main(int argc, char* argv[]) {
     bool demoMode     = (argc > 1 && std::string(argv[1]) == "--demo");
     bool cnnMode      = (argc > 1 && std::string(argv[1]) == "--cnn");
     bool unknownMode  = (argc > 1 && std::string(argv[1]) == "--unknown");
+    bool guiMode      = (argc > 1 && std::string(argv[1]) == "--gui");
     std::vector<TrainingEntry> db = loadTrainingData(DB_PATH);
 
     if (trainingMode) {
@@ -107,6 +108,66 @@ int main(int argc, char* argv[]) {
             cv::waitKey(0);
             cv::destroyAllWindows();
         }
+        return 0;
+    }
+
+    if (guiMode) {
+        std::cout << "=== INTERACTIVE GUI MODE ===" << std::endl;
+        std::cout << "Keys: N=next  P=prev  U=toggle unknown  Q=quit" << std::endl;
+
+        int imgIdx = 0;
+        bool unknownDetect = false;
+
+        while (true) {
+            auto& [fname, trueLabel] = EVAL_SET[imgIdx % EVAL_SET.size()];
+            cv::Mat src = cv::imread(IMG_DIR + fname);
+            if (src.empty()) { imgIdx++; continue; }
+
+            cv::Mat binary  = applyThreshold(src);
+            cv::Mat cleaned = applyMorphology(binary);
+            cv::Mat labelViz;
+            std::vector<RegionInfo> regions = segmentRegions(cleaned, labelViz);
+
+            cv::Mat display = src.clone();
+            if (!regions.empty()) {
+                cv::Mat featDisplay;
+                FeatureVector fv = computeFeatures(cleaned, regions[0], featDisplay);
+                std::string predicted = classify(fv, db, unknownDetect ? 0.5 : 1e9);
+
+                cv::rectangle(display, regions[0].boundingBox, cv::Scalar(0,255,0), 2);
+                cv::putText(display, "Pred: " + predicted, cv::Point(20,40),
+                    cv::FONT_HERSHEY_SIMPLEX, 1.0,
+                    predicted==trueLabel ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 2);
+                cv::putText(display, "True: " + trueLabel, cv::Point(20,80),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,0), 2);
+                cv::putText(display, std::string("Unknown: ") + (unknownDetect ? "ON" : "OFF"),
+                    cv::Point(20,120), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(255,128,0), 2);
+                cv::putText(display, "N=next P=prev U=toggle Q=quit",
+                    cv::Point(20, display.rows-20),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(200,200,200), 1);
+                cv::putText(display, fname, cv::Point(20, display.rows-50),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(200,200,200), 1);
+
+                cv::imshow("ObjectRec GUI", display);
+                cv::imshow("Threshold", binary);
+                cv::imshow("Regions", labelViz);
+                cv::imshow("Features", featDisplay);
+            } else {
+                cv::putText(display, "No region found", cv::Point(20,40),
+                    cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0,0,255), 2);
+                cv::imshow("ObjectRec GUI", display);
+            }
+
+            int key = cv::waitKey(0) & 0xFF;
+            if (key == 'q' || key == 'Q') break;
+            if (key == 'n' || key == 'N') imgIdx = (imgIdx + 1) % EVAL_SET.size();
+            if (key == 'p' || key == 'P') imgIdx = (imgIdx - 1 + EVAL_SET.size()) % EVAL_SET.size();
+            if (key == 'u' || key == 'U') {
+                unknownDetect = !unknownDetect;
+                std::cout << "Unknown detection: " << (unknownDetect ? "ON" : "OFF") << std::endl;
+            }
+        }
+        cv::destroyAllWindows();
         return 0;
     }
 
